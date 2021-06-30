@@ -11,3 +11,6 @@ jobs:
       - run: ls
       - run: pwd
       - run: cargo build --release --all-features
+        with:
+          name: squawkbot
+          path: target/release/squawkbot  
