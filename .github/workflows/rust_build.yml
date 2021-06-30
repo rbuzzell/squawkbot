@@ -13,5 +13,5 @@ jobs:
       - run: cargo build --release --all-features
       - uses: actions/upload-artifact@v2
         with:
-        name: squawkbot
-        path: target/release/squawkbot
+          name: squawkbot
+          path: target/release/squawkbot
