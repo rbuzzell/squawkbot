@@ -1,7 +1,5 @@
 name: 'GitHub Action Build Container'
 on: [push]
-jobs:
-  Build-Container
-       - runs:
-           using: 'docker'
-           image: 'Dockerfile'
+  runs:
+    using: 'docker'
+    image: 'Dockerfile'
