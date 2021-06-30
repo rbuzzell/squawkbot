@@ -1,5 +1,6 @@
 job1:
-  name: 'GitHub Action Build Container'
-    runs:
-      using: 'docker'
-      image: 'Dockerfile'
+  steps:
+    name: 'GitHub Action Build Container'
+      runs:
+        using: 'docker'
+        image: 'Dockerfile'
