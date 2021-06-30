@@ -2,8 +2,8 @@
 FROM alpine:3.10
 
 # Copies your code file from your action repository to the filesystem path `/` of the container
-COPY squawkbot/src/entrypoint.sh /entrypoint.sh
-COPY squawkbot/target/* /var/bot_stuff/
+COPY src/entrypoint.sh /entrypoint.sh
+COPY target/release/squawkbot /opt/bot_stuff/squawkbot
 
 # Code file to execute when the docker container starts up (`entrypoint.sh`)
 ENTRYPOINT ["/entrypoint.sh"]
