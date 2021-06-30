@@ -1,4 +1,5 @@
 on: [push]
+runs-on: ubuntu-latest
 jobs:
   build_and_test:
     name: squawkbot
