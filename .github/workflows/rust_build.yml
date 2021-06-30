@@ -1,7 +1,7 @@
 on: [push]
 jobs:
   build_and_test:
-    name: Build Squawkbot
+    - name: Build Squawkbot
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -11,8 +11,8 @@ jobs:
       - run: ls
       - run: pwd
       - run: cargo build --release --all-features
-    name: upload artifact
-      uses: actions/upload-artifact@v2
-      with:
-      name: squawkbot
-      path: target/release/squawkbot
+    - name: upload artifact
+     uses: actions/upload-artifact@v2
+     with:
+     name: squawkbot
+     path: target/release/squawkbot
