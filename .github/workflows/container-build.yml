@@ -2,8 +2,6 @@ name: GitHub Action Build Container
 on: [push]
 jobs:
   Build-Container
-     - name: Checkout Repo code
-       uses: actions/checkout@v2
        runs:
          using: 'docker'
          image: 'Dockerfile'
