@@ -1,6 +1,8 @@
 on: [push]
-name: 'Hello World'
-description: 'Greet someone and record the time'
-runs:
-  using: 'docker'
-  image: 'Dockerfile'
+jobs:
+  build_container:
+    name: 'Hello World'
+    description: 'Greet someone and record the time'
+    runs:
+      using: 'docker'
+      image: 'Dockerfile'
