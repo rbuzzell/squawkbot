@@ -1,6 +1,5 @@
 # Container image that runs your code
-FROM alpine:3.10
-
+FROM rust:latest
 # Copies your code file from your action repository to the filesystem path `/` of the container
 COPY src/entrypoint.sh /entrypoint.sh
 COPY target/release/squawkbot /opt/bot_stuff/squawkbot
