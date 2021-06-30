@@ -1,8 +1,8 @@
 on: [push]
-runs-on: ubuntu-latest
 jobs:
   build_and_test:
     name: squawkbot
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
