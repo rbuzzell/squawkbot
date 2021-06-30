@@ -1,3 +1,4 @@
+on: [push]
 jobs:
   build_and_test:
     name: squawkbot
