@@ -8,9 +8,8 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - run: ls
-      - run: pwd
       - run: cargo build --release --all-features
+      - run: cargo test --verbose
       - uses: actions/upload-artifact@v2
         with:
           name: squawkbot
