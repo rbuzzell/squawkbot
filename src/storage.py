@@ -2,12 +2,31 @@
 
 import sqlite3
 import os
+import sqlalchemy as db
+from sqlalchemy import Table, Column, Integer, String, MetaData
 
 
 class Storage:
     def __init__(self):
         os.makedirs('sqlite', exist_ok=True)  # creates directory for db
-        con = sqlite3.connect('/sqlite/storage')  # creating db object
-        cur = con.cursor()  # selecting db object
-        cur.execute("create table metrics (server_name, user, high_score)")  # creating user metrics table
-        cur.execute("create table current_count (server_name, user, current_score, last_user)")  # create counts
+        engine = db.create_engine('sqlite:///sqlite/storage.db')
+        connection = engine.connect()
+        meta = MetaData()
+        metrics = Table(
+            'metrics', meta,
+            Column('id', Integer, primary_key=True),
+            Column('server_name', String),
+            Column('user', String),
+            Column('high_score', Integer)
+        )
+        current_count = Table(
+            'current_count', meta,
+            Column('id', Integer, primary_key=True),
+            Column('server_name', String),
+            Column('user', String),
+            Column('current_score', Integer)
+        )
+        meta.create_all(engine)
+
+
+driver = Storage()
