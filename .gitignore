@@ -228,3 +228,5 @@ $RECYCLE.BIN/
 
 # JetBrains Directories
 .idea/
+
+node_modules/
