@@ -15,7 +15,7 @@
         # defaultPackage.x86_64-linux = self.packages.x86_64-linux.squawkbot;
 
         devShell = pkgs.mkShell {
-          buildInputs = [ pkgs.nodejs ];
+          buildInputs = [ pkgs.nodejs pkgs.sqlite-interactive ];
         };
     });
 }
