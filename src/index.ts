@@ -113,12 +113,12 @@ async function loserboard(ctx: Context, user: D.User, guild: D.Guild, prevCount:
   }
 
   let n = 0;
-  let contributors = (await Promise.all((await ctx.db.all(`SELECT user, bumps FROM stats WHERE guild = ? ORDER BY bumps DESC`, [ 'guild:' + guild.id ]))
+  let contributors = (await Promise.all((await ctx.db.all(`SELECT user, bumps FROM stats WHERE guild = ? ORDER BY bumps DESC LIMIT 10`, [ 'guild:' + guild.id ]))
                                           .map(async (row) => `${++n}: ${await nickname1(row.user)}, with ${row.bumps} bumps`)))
                        .join('\n');
 
   n = 0;
-  let losers = (await Promise.all((await ctx.db.all(`SELECT user, loss FROM stats WHERE guild = ? ORDER BY loss DESC`, [ 'guild:' + guild.id ]))
+  let losers = (await Promise.all((await ctx.db.all(`SELECT user, loss FROM stats WHERE guild = ? ORDER BY loss DESC LIMIT 10`, [ 'guild:' + guild.id ]))
                                     .map(async (row) => `${++n}: ${await nickname1(row.user)}, with ${row.loss} losses`)))
                  .join('\n');
 
