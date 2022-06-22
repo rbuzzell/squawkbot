@@ -107,33 +107,80 @@ async function incr(ctx: Context, user: D.User, guild: D.Guild, guess: string): 
 }
 
 async function loserboard(ctx: Context, user: D.User, guild: D.Guild, prevCount: number): Promise<string> {
-  async function nickname(user: D.User | string) {
+  async function nickname(user: D.User | string): Promise<string> {
     return (await guild.members.fetch(user)).nickname;
   }
-  async function nickname1(user: string) {
+
+  let msg =
+`${await nickname(user)} RUINED IT at ${prevCount}!
+
+${await leaderboard(ctx, guild)}`
+
+  return msg;
+}
+
+async function leaderboard(ctx: Context, guild: D.Guild): Promise<string> {
+  async function nickname(user: D.User | string): Promise<string> {
+    return (await guild.members.fetch(user)).nickname;
+  }
+  async function nickname1(user: string): Promise<string> {
     return await nickname(user.match(/^user:(\d+)$/)[1]);
   }
 
   let n = 0;
-  let contributors = (await Promise.all((await ctx.db.all(`SELECT user, bumps FROM stats WHERE guild = ? ORDER BY bumps DESC LIMIT 10`, [ 'guild:' + guild.id ]))
-                                          .map(async (row) => `${++n}: ${await nickname1(row.user)}, with ${row.bumps} bumps`)))
+  let contributors = (await Promise.all(
+    (await ctx.db.all(`SELECT user, bumps FROM stats WHERE guild = ? ORDER BY bumps DESC LIMIT 10`,
+                      [ 'guild:' + guild.id ]))
+      .map(async (row) => `${++n}: ${await nickname1(row.user)}, with ${row.bumps} bumps`)))
                        .join('\n');
 
   n = 0;
-  let losers = (await Promise.all((await ctx.db.all(`SELECT user, loss FROM stats WHERE guild = ? ORDER BY loss DESC LIMIT 10`, [ 'guild:' + guild.id ]))
-                                    .map(async (row) => `${++n}: ${await nickname1(row.user)}, with ${row.loss} losses`)))
+  let losers = (await Promise.all(
+    (await ctx.db.all(`SELECT user, loss FROM stats WHERE guild = ? ORDER BY loss DESC LIMIT 10`,
+                      [ 'guild:' + guild.id ]))
+      .map(async (row) => `${++n}: ${await nickname1(row.user)}, with ${row.loss} losses`)))
                  .join('\n');
 
 let msg =
-`${await nickname(user)} RUINED IT at ${prevCount}!
-
-Biggest contributers:
+`Biggest contributers:
 ${contributors}
 
 Biggest losers:
 ${losers}`;
 
   return msg;
+}
+
+async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
+  let evalRes;
+  try {
+    debug(`Sending eval query for "${msg.content}"...`);
+    evalRes = await axios.post("https://counter.robgssp.com/eval",
+                               { message: msg.content });
+  } catch (error) {
+    if (error.response) {
+      debug(`Bad eval: ${error.response.data}`);
+      return;
+    } else {
+      throw error;
+    }
+  }
+
+  debug(`Good eval: ${evalRes.data.val}`);
+
+  let [ result, prevCount ] = await incr(ctx, msg.author, msg.guild, evalRes.data.val);
+  switch (result) {
+    case 'bump':
+      await msg.react('👍');
+      break;
+    case 'ignore':
+      await msg.react('👀');
+      break;
+    case 'loss':
+      await msg.react('👎');
+      msg.channel.send(await loserboard(ctx, msg.author, msg.guild, prevCount));
+      break;
+  }
 }
 
 (async () => {
@@ -166,37 +213,17 @@ ${losers}`;
   });
 
   client.on('messageCreate', async (msg: D.Message) => {
-    let channel = msg.channel;
-    if (channel instanceof D.TextChannel && channel.name === "botspam") {
-      let evalRes;
-      try {
-        debug(`Sending eval query for "${msg.content}"...`);
-        evalRes = await axios.post("https://counter.robgssp.com/eval",
-                                   { message: msg.content });
-      } catch (error) {
-        if (error.response) {
-          debug(`Bad eval: ${error.response.data}`);
-          return;
+    try {
+      let channel = msg.channel;
+      if (channel instanceof D.TextChannel && channel.name === "botspam") {
+        if (msg.content == 's!leaderboard') {
+          msg.channel.send(await leaderboard(ctx, msg.guild));
         } else {
-          throw error;
+          await evalMessage(ctx, msg);
         }
       }
-
-      debug(`Good eval: ${evalRes.data.val}`);
-
-      let [ result, prevCount ] = await incr(ctx, msg.author, msg.guild, evalRes.data.val);
-      switch (result) {
-        case 'bump':
-          await msg.react('👍');
-          break;
-        case 'ignore':
-          await msg.react('👀');
-          break;
-        case 'loss':
-          await msg.react('👎');
-          msg.channel.send(await loserboard(ctx, msg.author, msg.guild, prevCount));
-          break;
-      }
+    } catch (e) {
+      debug(`Processing of message "${msg.content}" failed:`, e);
     }
   });
 })();
