@@ -4,6 +4,8 @@ import * as sqlite3 from "sqlite3";
 import * as sqlite from "sqlite";
 import { Mutex } from "async-mutex";
 
+var debug = require('debug')('squawk');
+
 async function setupDb(ctx: Context) {
   await ctx.db.exec(`CREATE TABLE IF NOT EXISTS count (
 guild TEXT NOT NULL PRIMARY KEY,
@@ -51,14 +53,14 @@ async function incr(ctx: Context, user: D.User, guild: D.Guild, guess: string): 
 
     let error: boolean = false;
     try {
-      console.log(`Incr for ${user} in ${guild}, guess ${guess}`);
+      debug(`Incr for ${user} in ${guild}, guess ${guess}`);
 
       let [ count, lastbumped ] = await currentCount(ctx, guild);
 
-      console.log(`Count was ${count}, lastbumped was ${lastbumped}`);
+      debug(`Count was ${count}, lastbumped was ${lastbumped}`);
 
       if (userId === lastbumped) {
-        console.log("User ignored: same as lastbumped");
+        debug("User ignored: same as lastbumped");
         return [ 'ignore', count ];
       }
       else if ((count + 1).toString() === guess) {
@@ -72,11 +74,11 @@ async function incr(ctx: Context, user: D.User, guild: D.Guild, guess: string): 
         await ctx.db.run(`INSERT INTO stats(guild, user, bumps, loss) VALUES (?, ?, 1, 0)
                             ON CONFLICT DO UPDATE SET bumps = bumps + 1`,
                          [ guildId, userId, ]);
-        console.log("Bumped");
+        debug("Bumped");
         return [ 'bump', count ];
       }
       else if (count === 0) {
-        console.log("User ignored: bad guess, count was 0");
+        debug("User ignored: bad guess, count was 0");
         return [ 'ignore', count ];
       }
       else {
@@ -86,7 +88,7 @@ async function incr(ctx: Context, user: D.User, guild: D.Guild, guess: string): 
         await ctx.db.run(`INSERT INTO stats(guild, user, bumps, loss) VALUES (?, ?, 0, 1)
                             ON CONFLICT DO UPDATE SET loss = loss + 1`,
                    [ guildId, userId ]);
-        console.log("Soiled it");
+        debug("Soiled it");
         return [ 'loss', count ];
       }
     }
@@ -157,10 +159,10 @@ ${losers}`;
   await setupDb(ctx);
 
   await client.login(process.env.BOT_TOKEN);
-  console.log("Logged in!");
+  debug("Logged in!");
 
   client.on("ready", async cli => {
-    console.log("Listening...");
+    debug("Listening...");
   });
 
   client.on('messageCreate', async (msg: D.Message) => {
@@ -168,18 +170,19 @@ ${losers}`;
     if (channel instanceof D.TextChannel && channel.name === "botspam") {
       let evalRes;
       try {
+        debug(`Sending eval query for "${msg.content}"...`);
         evalRes = await axios.post("https://counter.robgssp.com/eval",
                                    { message: msg.content });
       } catch (error) {
         if (error.response) {
-          console.log(`Bad eval: ${error.response.data}`);
+          debug(`Bad eval: ${error.response.data}`);
           return;
         } else {
           throw error;
         }
       }
 
-      console.log(`Good eval: ${evalRes.data.val}`);
+      debug(`Good eval: ${evalRes.data.val}`);
 
       let [ result, prevCount ] = await incr(ctx, msg.author, msg.guild, evalRes.data.val);
       switch (result) {
