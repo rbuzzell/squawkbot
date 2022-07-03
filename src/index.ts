@@ -110,7 +110,7 @@ ${await leaderboard(ctx, guild)}`
 
 async function leaderboard(ctx: Context, guild: D.Guild): Promise<string> {
   async function nickname(user: D.User | string): Promise<string> {
-    return (await guild.members.fetch(user)).nickname;
+    return (await guild.members.fetch(user)).displayName;
   }
   async function nickname1(user: string): Promise<string> {
     return await nickname(user.match(/^user:(\d+)$/)[1]);
