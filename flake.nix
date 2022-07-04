@@ -11,10 +11,21 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        nodeEnv = { nodeSrcs }:
-          pkgs.stdenv.mkDerivation {
+        nodeDeps = (import (self.packages.${system}.nodeEnv) {
+          inherit pkgs;
+        }).nodeDependencies;
+
+      in {
+        packages = {
+          srcsStripped = pkgs.runCommand "sources-stripped" { } ''
+            mkdir $out
+            ln -s ${./package.json} $out/package.json
+            ln -s ${./package-lock.json} $out/package-lock.json
+          '';
+
+          nodeEnv = pkgs.stdenv.mkDerivation {
             name = "node-env";
-            src = nodeSrcs;
+            src = self.packages.${system}.srcsStripped;
             buildInputs = with pkgs; [ nodejs sqlite node2nix ];
 
             buildPhase = ''
@@ -26,21 +37,14 @@
             '';
           };
 
-        nodeDeps = { nodeSrcs }:
-          (import (nodeEnv { inherit nodeSrcs; }) {
-            inherit pkgs;
-          }).nodeDependencies;
-
-        squawkbot = { nodeSrcs }:
-          let nodeDepsOurs = nodeDeps { inherit nodeSrcs; };
-          in pkgs.stdenv.mkDerivation {
+          squawkbot = pkgs.stdenv.mkDerivation {
             name = "squawkbot";
             src = ./.;
             buildInputs = with pkgs; [ nodejs sqlite ];
             nativeBuildInputs = [ pkgs.makeWrapper ];
 
             buildPhase = ''
-              ln -s ${nodeDepsOurs}/lib/node_modules node_modules
+              ln -s ${nodeDeps}/lib/node_modules node_modules
 
               npm run build
             '';
@@ -61,26 +65,6 @@
                 }
             '';
           };
-
-      in {
-        packages = {
-          # save on rebuilds with __contentAddressed
-          srcsStripped = pkgs.runCommand "sources-stripped" {
-            __contentAddressed = true;
-            src = ./.;
-          } ''
-            mkdir $out
-            cp -a $src/package.json $src/package-lock.json $out
-          '';
-
-          nodeEnv = nodeEnv { nodeSrcs = self.packages.${system}.srcsStripped; };
-
-          squawkbot =
-            squawkbot { nodeSrcs = self.packages.${system}.srcsStripped; };
-
-          # Colmena can't handle CA for some reason, even when it's
-          # enabled system-wide
-          squawkbotNoCA = squawkbot { nodeSrcs = ./.; };
 
           default = self.packages.${system}.squawkbot;
         };
