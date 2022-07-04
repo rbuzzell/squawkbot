@@ -97,7 +97,7 @@ function incr(ctx: Context, user: D.User, guild: D.Guild, guess: string): [Count
 
 async function loserboard(ctx: Context, user: D.User, guild: D.Guild, prevCount: number): Promise<string> {
   async function nickname(user: D.User | string): Promise<string> {
-    return (await guild.members.fetch(user)).nickname;
+    return (await guild.members.fetch(user)).displayName;
   }
 
   let msg =
