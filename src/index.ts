@@ -3,8 +3,24 @@ import axios from "axios";
 import * as sqlite from "better-sqlite3";
 import Database from "better-sqlite3";
 import { Mutex } from "async-mutex";
+import { Command } from 'commander';
 
 var debug = require('debug')('squawk');
+
+const program = new Command();
+
+program
+  .name('squawkbot')
+  .description('Discord counting bot')
+  .version('0.6.9')
+  .option('--evaluator <url>', 'eval endpoint', 'https://counter.robgssp.com')
+  .option('--allow-repeats', 'allow multiple guesses in a row')
+  .parse();
+
+type Options = {
+  evaluator: string,
+  allowRepeats: boolean,
+}
 
 function setupDb(ctx: Context): void {
   ctx.db.exec(`CREATE TABLE IF NOT EXISTS count (
@@ -27,6 +43,7 @@ type CountResult = 'bump' | 'ignore' | 'loss';
 type Context = {
   db: sqlite.Database,
   discord: D.Client,
+  options: Options,
 };
 
 function currentCount(ctx: Context, guild: D.Guild): [number, string | null] {
@@ -53,7 +70,7 @@ function incr(ctx: Context, user: D.User, guild: D.Guild, guess: string): [Count
 
     debug(`Count was ${count}, lastbumped was ${lastbumped}`);
 
-    if (userId === lastbumped && !process.argv.includes('--allow-repeats')) {
+    if (userId === lastbumped && !ctx.options.allowRepeats) {
       debug("User ignored: same as lastbumped");
       return [ 'ignore', count ];
     }
@@ -144,7 +161,7 @@ async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
   let evalRes;
   try {
     debug(`Sending eval query for "${msg.content}"...`);
-    evalRes = await axios.post("https://counter.robgssp.com/eval",
+    evalRes = await axios.post(ctx.options.evaluator + "/eval",
                                { message: msg.content });
   } catch (error) {
     if (error.response) {
@@ -186,6 +203,7 @@ async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
   var ctx: Context = {
     db: db,
     discord: client,
+    options: program.opts(),
   };
 
   setupDb(ctx);
