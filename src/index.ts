@@ -1,4 +1,5 @@
 import * as D from "discord.js";
+import { OAuth2Scopes } from "discord-api-types/v10";
 import axios from "axios";
 import * as sqlite from "better-sqlite3";
 import Database from "better-sqlite3";
@@ -15,11 +16,13 @@ program
   .version('0.6.9')
   .option('--evaluator <url>', 'eval endpoint', 'https://counter.robgssp.com')
   .option('--allow-repeats', 'allow multiple guesses in a row')
+  .option('--register-commands', 'register bot commands')
   .parse();
 
 type Options = {
   evaluator: string,
   allowRepeats: boolean,
+  registerCommands: boolean,
 }
 
 function setupDb(ctx: Context): void {
@@ -117,50 +120,62 @@ async function loserboard(ctx: Context, user: D.User, guild: D.Guild, prevCount:
     return (await guild.members.fetch(user)).displayName;
   }
 
+  debug("Generating loserboard...");
+
   let msg =
 `${await nickname(user)} RUINED IT at ${prevCount}!
 
 ${await leaderboard(ctx, guild)}`
 
+  debug("Generated loserboard");
   return msg;
 }
 
 async function leaderboard(ctx: Context, guild: D.Guild): Promise<string> {
   async function nickname(user: D.User | string): Promise<string> {
-    return (await guild.members.fetch(user)).displayName;
+    debug(`Fetching nickname for ${user}`);
+    let nick = (await guild.members.fetch(user)).displayName;
+    debug(`Fetched nickname ${nick} for ${user}`);
+    return nick;
   }
   async function nickname1(user: string): Promise<string> {
     return await nickname(user.match(/^user:(\d+)$/)[1]);
   }
 
+
+  let contributors;
+  let losers;
+
+  ctx.db.transaction(() => {
+    contributors = ctx.db.prepare(`SELECT user, bumps FROM stats WHERE guild = ? ORDER BY bumps DESC LIMIT 10`)
+      .all([ 'guild:' + guild.id ]);
+
+    losers = ctx.db.prepare(`SELECT user, loss FROM stats WHERE guild = ? ORDER BY loss DESC LIMIT 10`)
+      .all([ 'guild:' + guild.id ]);
+  })();
+
   let n = 0;
-  let contributors = (await Promise.all(
-    ctx.db.prepare(`SELECT user, bumps FROM stats WHERE guild = ? ORDER BY bumps DESC LIMIT 10`)
-      .all([ 'guild:' + guild.id ])
-      .map(async (row) => `${++n}: ${await nickname1(row.user)}, with ${row.bumps} bumps`)))
-                       .join('\n');
+  let contrib1 = (await Promise.all(contributors.map(async (row) => `${++n}: ${await nickname1(row.user)}, with ${row.bumps} bumps`)))
+      .join('\n');
 
   n = 0;
-  let losers = (await Promise.all(
-    ctx.db.prepare(`SELECT user, loss FROM stats WHERE guild = ? ORDER BY loss DESC LIMIT 10`)
-      .all([ 'guild:' + guild.id ])
-      .map(async (row) => `${++n}: ${await nickname1(row.user)}, with ${row.loss} losses`)))
-                 .join('\n');
+  let losers1 = (await Promise.all(losers.map(async (row) => `${++n}: ${await nickname1(row.user)}, with ${row.loss} losses`)))
+      .join('\n');
 
 let msg =
 `Biggest contributers:
-${contributors}
+${contrib1}
 
 Biggest losers:
-${losers}`;
+${losers1}`;
 
   return msg;
 }
 
 async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
+  debug(`Evaluating "${msg.content}"`);
   let evalRes;
   try {
-    debug(`Sending eval query for "${msg.content}"...`);
     evalRes = await axios.post(ctx.options.evaluator + "/eval",
                                { message: msg.content });
   } catch (error) {
@@ -176,27 +191,37 @@ async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
 
   let [ result, prevCount ] = await incr(ctx, msg.author, msg.guild, evalRes.data.val);
   switch (result) {
-    case 'bump':
-      await msg.react('👍');
-      break;
-    case 'ignore':
-      await msg.react('👀');
-      break;
-    case 'loss':
-      await msg.react('👎');
-      msg.channel.send(await loserboard(ctx, msg.author, msg.guild, prevCount));
-      break;
+  case 'bump':
+    await msg.react('👍');
+    break;
+  case 'ignore':
+    await msg.react('👀');
+    break;
+  case 'loss': {
+    debug("Loss!");
+    await Promise.all([
+      msg.react('👎'),
+      (async () => await msg.reply(await loserboard(ctx, msg.author, msg.guild, prevCount)))()
+    ]);
+    break;
+  }
   }
 }
 
 (async () => {
-  const client = new D.Client({intents: [
-    1 << 15, // MESSAGE_CONTENT intent, not in discord.js yet
-    D.Intents.FLAGS.GUILDS,
-    D.Intents.FLAGS.GUILD_EMOJIS_AND_STICKERS,
-    D.Intents.FLAGS.GUILD_MESSAGES,
-    D.Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
-  ]});
+  const client = new D.Client(
+    {intents: [
+      1 << 15, // MESSAGE_CONTENT intent, not in discord.js yet
+      D.Intents.FLAGS.GUILDS,
+      D.Intents.FLAGS.GUILD_EMOJIS_AND_STICKERS,
+      D.Intents.FLAGS.GUILD_MESSAGES,
+      D.Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
+      D.Intents.FLAGS.DIRECT_MESSAGES,
+    ],
+     // Required to receive DMs. See https://github.com/discordjs/discord.js/issues/5516
+     partials: [
+       'CHANNEL',
+     ]});
 
   let db = Database("test.db");
 
@@ -213,20 +238,64 @@ async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
 
   client.on("ready", async cli => {
     debug("Listening...");
+
+    let commands = await cli.application.commands.fetch();
+
+    if (commands.size == 0 || ctx.options.registerCommands) {
+      debug("Clearing and recreating commands...");
+      await Promise.all(commands.map(async (_, command) =>
+        await cli.application.commands.delete(command)));
+
+      await cli.application.commands.create({
+        name: "leaderboard",
+        description: "Who can you count on?",
+      });
+      debug("Commands created");
+    }
+
+    debug("Application invite link:", cli.generateInvite({
+      scopes: [ OAuth2Scopes.ApplicationsCommands ],
+    }));
   });
 
   client.on('messageCreate', async (msg: D.Message) => {
     try {
       let channel = msg.channel;
-      if (channel instanceof D.TextChannel && channel.name === "botspam") {
-        if (msg.content == 's!leaderboard') {
-          msg.channel.send(await leaderboard(ctx, msg.guild));
-        } else {
-          await evalMessage(ctx, msg);
-        }
+      if (channel.partial) await channel.fetch();
+
+      if (channel instanceof D.TextChannel && channel.name === "botspam" &&
+          msg.author.id != client.user.id) {
+        await evalMessage(ctx, msg);
+        debug("Response complete");
       }
     } catch (e) {
       debug(`Processing of message "${msg.content}" failed:`, e);
+    }
+  });
+
+  client.on('interactionCreate', async (interact: D.Interaction) => {
+    if (interact.isCommand() && interact.command.name == "leaderboard") {
+      try {
+        if (interact.guild) {
+          debug("Leaderboard command in guild");
+          await interact.reply(await leaderboard(ctx, interact.guild));
+        } else if (interact.user) {
+          debug("Leaderboard command in DM");
+          // Assume this is a DM if there's no guild associated
+
+          await Promise.all((await client.guilds.fetch()).map(async guild => {
+            let guild1 = await guild.fetch();
+            if (await guild1.members.fetch(interact.user)) {
+              await interact.reply(await leaderboard(ctx, guild1));
+            }
+          }));
+        } else {
+          debug("Weird command with no user or guild received");
+        }
+        debug("Interact complete");
+      } catch (e) {
+        debug(`Processing of interact failed:`, e);
+      }
     }
   });
 })();
