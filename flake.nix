@@ -2,7 +2,7 @@
   description = "A very basic flake";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
     utils.url = "github:numtide/flake-utils";
   };
 
@@ -10,6 +10,8 @@
     utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+
+        deps = with pkgs; [ nodejs-18_x sqlite ];
 
         nodeDeps = (import (self.packages.${system}.nodeEnv) {
           inherit pkgs;
@@ -26,10 +28,13 @@
           nodeEnv = pkgs.stdenv.mkDerivation {
             name = "node-env";
             src = self.packages.${system}.srcsStripped;
-            buildInputs = with pkgs; [ nodejs sqlite node2nix ];
+            buildInputs = deps ++ [ pkgs.node2nix ];
 
             buildPhase = ''
-              node2nix -16 -l package-lock.json
+              # WARNING: the node version and node2nix's mode must
+              # match, or else you will get mysterious symbol errors
+
+              node2nix -18 -l package-lock.json
             '';
             installPhase = ''
               mkdir $out
@@ -40,7 +45,7 @@
           squawkbot = pkgs.stdenv.mkDerivation {
             name = "squawkbot";
             src = ./.;
-            buildInputs = with pkgs; [ nodejs sqlite ];
+            buildInputs = deps;
             nativeBuildInputs = [ pkgs.makeWrapper ];
 
             buildPhase = ''
@@ -60,9 +65,8 @@
               chmod a+x $out/bin/squawkbot
 
               wrapProgram $out/bin/squawkbot \
-                --set PATH ${
-                  pkgs.lib.makeBinPath (with pkgs; [ nodejs sqlite ])
-                }
+                --set PATH ${pkgs.lib.makeBinPath deps} \
+                --set LD_LIBRARY_PATH ${pkgs.lib.makeLibraryPath deps}
             '';
           };
 
@@ -70,7 +74,7 @@
         };
 
         devShell = pkgs.mkShell {
-          buildInputs = with pkgs; [ nodejs sqlite-interactive node2nix ];
+          buildInputs = with pkgs; deps ++ [ sqlite-interactive node2nix ];
         };
 
         formatter = pkgs.nixfmt;
