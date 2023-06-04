@@ -162,12 +162,16 @@ async function leaderboard(ctx: Context, guild: D.Guild): Promise<string> {
   let losers1 = (await Promise.all(losers.map(async (row) => `${++n}: ${await nickname1(row.user)}, with ${row.loss} losses`)))
       .join('\n');
 
+  let [ count, _ ] = currentCount(ctx, guild);
+
 let msg =
 `Biggest contributers:
 ${contrib1}
 
 Biggest losers:
-${losers1}`;
+${losers1}
+
+The count's at ${count}.`;
 
   return msg;
 }
