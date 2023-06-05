@@ -53,7 +53,8 @@ type CountResult = 'bump' | 'ignore' | 'loss';
 type Context = {
   db: sqlite.Database,
   discord: D.Client,
-  statusChannels: Array<D.TextChannel>,
+  isProd: boolean,
+  channels: Set<D.TextChannel>,
   options: Options,
 };
 
@@ -233,9 +234,21 @@ async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
 }
 
 async function statusMessage(ctx: Context, message: string): Promise<void> {
-  await Promise.all(ctx.statusChannels.map(async chan => {
+  await Promise.all(Array.from(ctx.channels).map(async chan => {
     await chan.send(message);
   }));
+}
+
+async function activeChannels(discord: D.Client, isProd: boolean): Promise<Set<D.TextChannel>> {
+  let targetChannel = isProd ? "counting" : "botspam";
+  return new Set((await Promise.all(
+    (await discord.guilds.fetch()).map(async (guild0: D.OAuth2Guild) => {
+      let guild = await guild0.fetch();
+      let channel = (await guild.channels.fetch()).find(
+        chan => chan.name === targetChannel);
+
+      if (channel instanceof D.TextChannel) return channel;
+    }))).filter(v => v));
 }
 
 (async () => {
@@ -255,17 +268,20 @@ async function statusMessage(ctx: Context, message: string): Promise<void> {
 
   let db = Database("test.db");
 
+  let isProd = os.hostname() === "shoemaker";
+
+  await client.login(process.env.BOT_TOKEN);
+  debug("Logged in!");
+
   var ctx: Context = {
     db: db,
     discord: client,
-    statusChannels: [],
+    isProd: isProd,
+    channels: await activeChannels(client, isProd),
     options: program.opts(),
   };
 
   setupDb(ctx);
-
-  await client.login(process.env.BOT_TOKEN);
-  debug("Logged in!");
 
   client.on("ready", async cli => {
     debug("Listening...");
@@ -294,7 +310,7 @@ async function statusMessage(ctx: Context, message: string): Promise<void> {
       let channel = msg.channel;
       if (channel.partial) await channel.fetch();
 
-      if (channel instanceof D.TextChannel && channel.name === "botspam" &&
+      if (channel instanceof D.TextChannel && ctx.channels.has(channel) &&
           msg.author.id != client.user.id) {
         await evalMessage(ctx, msg);
         debug("Response complete");
@@ -334,15 +350,7 @@ async function statusMessage(ctx: Context, message: string): Promise<void> {
     }
   });
 
-  ctx.statusChannels = (await Promise.all((await ctx.discord.guilds.fetch()).map(async (guild0: D.OAuth2Guild) => {
-    let guild = await guild0.fetch();
-    let channel = (await guild.channels.fetch()).find(
-      chan => chan.name === "botspam");
-
-    if (channel instanceof D.TextChannel) return channel;
-  }))).filter(v => v);
-
-  if (os.hostname() === "shoemaker") {
+  if (isProd) {
     await statusMessage(ctx, "Squawkbot active for real");
   } else {
     await statusMessage(ctx, "Squawkbot active in test mode");
