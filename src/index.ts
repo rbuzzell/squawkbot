@@ -40,7 +40,13 @@ bumps INTEGER NOT NULL,
 loss INTEGER NOT NULL,
 PRIMARY KEY (guild, user))
 STRICT`);
+
+  ctx.db.exec(`CREATE TABLE IF NOT EXISTS high_score (
+guild TEXT NOT NULL PRIMARY KEY,
+count INTEGER NOT NULL)
+STRICT`);
 }
+
 
 type CountResult = 'bump' | 'ignore' | 'loss';
 
@@ -94,6 +100,14 @@ function incr(ctx: Context, user: D.User, guild: D.Guild, guess: string): [Count
           "ON CONFLICT DO UPDATE SET bumps = bumps + 1")
         .run([ guildId, userId, ]);
 
+      ctx.db.prepare(
+        "INSERT INTO high_score(guild, count) VALUES (:guild, :count) " +
+          "ON CONFLICT DO UPDATE SET count = max(count, :count)")
+        .run({
+          guild: guildId,
+          count: count + 1,
+        });
+
       debug("Bumped");
       return [ 'bump', count ];
     }
@@ -117,15 +131,22 @@ function incr(ctx: Context, user: D.User, guild: D.Guild, guess: string): [Count
   })();
 }
 
-async function loserboard(ctx: Context, user: D.User, guild: D.Guild, prevCount: number): Promise<string> {
-  async function nickname(user: D.User | string): Promise<string> {
-    return (await guild.members.fetch(user)).displayName;
+async function nickname(guild: D.Guild, user: D.User | string): Promise<string> {
+  debug(`Fetching nickname for ${user}`);
+  try {
+    let nick = (await guild.members.fetch(user)).displayName;
+    debug(`Fetched nickname ${nick} for ${user}`);
+    return nick;
+  } catch (e) {
+    return "unknown";
   }
+}
 
+async function loserboard(ctx: Context, user: D.User, guild: D.Guild, prevCount: number): Promise<string> {
   debug("Generating loserboard...");
 
   let msg =
-`${await nickname(user)} RUINED IT at ${prevCount}!
+`${await nickname(guild, user)} RUINED IT at ${prevCount}!
 
 ${await leaderboard(ctx, guild)}`
 
@@ -134,22 +155,13 @@ ${await leaderboard(ctx, guild)}`
 }
 
 async function leaderboard(ctx: Context, guild: D.Guild): Promise<string> {
-  async function nickname(user: D.User | string): Promise<string> {
-    debug(`Fetching nickname for ${user}`);
-    try {
-      let nick = (await guild.members.fetch(user)).displayName;
-      debug(`Fetched nickname ${nick} for ${user}`);
-      return nick;
-    } catch (e) {
-      return "unknown";
-    }
-  }
   async function nickname1(user: string): Promise<string> {
-    return await nickname(user.match(/^user:(\d+)$/)[1]);
+    return await nickname(guild, user.match(/^user:(\d+)$/)[1]);
   }
 
   let contributors;
   let losers;
+  let high_score;
 
   ctx.db.transaction(() => {
     contributors = ctx.db.prepare(`SELECT user, bumps FROM stats WHERE guild = ? ORDER BY bumps DESC LIMIT 10`)
@@ -157,6 +169,9 @@ async function leaderboard(ctx: Context, guild: D.Guild): Promise<string> {
 
     losers = ctx.db.prepare(`SELECT user, loss FROM stats WHERE guild = ? ORDER BY loss DESC LIMIT 10`)
       .all([ 'guild:' + guild.id ]);
+
+    high_score = ctx.db.prepare(`SELECT count FROM high_score WHERE guild = ?`)
+      .get([ 'guild:' + guild.id ])?.count || 0;
   })();
 
   let n = 0;
@@ -176,7 +191,7 @@ ${contrib1}
 Biggest losers:
 ${losers1}
 
-The count's at ${count}.`;
+The count's at ${count}. High score is ${high_score}.`;
 
   return msg;
 }
