@@ -136,9 +136,13 @@ ${await leaderboard(ctx, guild)}`
 async function leaderboard(ctx: Context, guild: D.Guild): Promise<string> {
   async function nickname(user: D.User | string): Promise<string> {
     debug(`Fetching nickname for ${user}`);
-    let nick = (await guild.members.fetch(user)).displayName;
-    debug(`Fetched nickname ${nick} for ${user}`);
-    return nick;
+    try {
+      let nick = (await guild.members.fetch(user)).displayName;
+      debug(`Fetched nickname ${nick} for ${user}`);
+      return nick;
+    } catch (e) {
+      return "unknown";
+    }
   }
   async function nickname1(user: string): Promise<string> {
     return await nickname(user.match(/^user:(\d+)$/)[1]);
