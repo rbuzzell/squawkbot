@@ -7,6 +7,7 @@ import { Mutex } from "async-mutex";
 import { Command } from 'commander';
 
 var debug = require('debug')('squawk');
+var os = require("os");
 
 const program = new Command();
 
@@ -46,6 +47,7 @@ type CountResult = 'bump' | 'ignore' | 'loss';
 type Context = {
   db: sqlite.Database,
   discord: D.Client,
+  statusChannels: Array<D.TextChannel>,
   options: Options,
 };
 
@@ -142,7 +144,6 @@ async function leaderboard(ctx: Context, guild: D.Guild): Promise<string> {
     return await nickname(user.match(/^user:(\d+)$/)[1]);
   }
 
-
   let contributors;
   let losers;
 
@@ -212,6 +213,12 @@ async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
   }
 }
 
+async function statusMessage(ctx: Context, message: string): Promise<void> {
+  await Promise.all(ctx.statusChannels.map(async chan => {
+    await chan.send(message);
+  }));
+}
+
 (async () => {
   const client = new D.Client(
     {intents: [
@@ -232,6 +239,7 @@ async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
   var ctx: Context = {
     db: db,
     discord: client,
+    statusChannels: [],
     options: program.opts(),
   };
 
@@ -282,7 +290,9 @@ async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
       try {
         if (interact.guild) {
           debug("Leaderboard command in guild");
-          await interact.reply(await leaderboard(ctx, interact.guild));
+          let board_p = leaderboard(ctx, interact.guild);
+          await interact.reply("Leaderboard coming up...");
+          await interact.editReply(await board_p);
         } else if (interact.user) {
           debug("Leaderboard command in DM");
           // Assume this is a DM if there's no guild associated
@@ -300,6 +310,22 @@ async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
       } catch (e) {
         debug(`Processing of interact failed:`, e);
       }
+    } else {
+      debug("Unknown interaction");
     }
   });
+
+  ctx.statusChannels = (await Promise.all((await ctx.discord.guilds.fetch()).map(async (guild0: D.OAuth2Guild) => {
+    let guild = await guild0.fetch();
+    let channel = (await guild.channels.fetch()).find(
+      chan => chan.name === "botspam");
+
+    if (channel instanceof D.TextChannel) return channel;
+  }))).filter(v => v);
+
+  if (os.hostname() === "shoemaker") {
+    await statusMessage(ctx, "Squawkbot active for real");
+  } else {
+    await statusMessage(ctx, "Squawkbot active in test mode");
+  }
 })();
