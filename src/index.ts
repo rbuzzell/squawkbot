@@ -48,7 +48,7 @@ STRICT`);
 }
 
 
-type CountResult = 'bump' | 'ignore' | 'loss';
+type CountResult = 'bump' | 'record' | 'ignore' | 'loss';
 
 type Context = {
   db: sqlite.Database,
@@ -80,6 +80,9 @@ function incr(ctx: Context, user: D.User, guild: D.Guild, guess: string): [Count
 
     let [ count, lastbumped ] = currentCount(ctx, guild);
 
+    let high_score = ctx.db.prepare(`SELECT count FROM high_score WHERE guild = ?`)
+        .get([ guildId ])?.count || 0;
+
     debug(`Count was ${count}, lastbumped was ${lastbumped}`);
 
     if (userId === lastbumped && !ctx.options.allowRepeats) {
@@ -109,8 +112,13 @@ function incr(ctx: Context, user: D.User, guild: D.Guild, guess: string): [Count
           count: count + 1,
         });
 
-      debug("Bumped");
-      return [ 'bump', count ];
+      if (count + 1 <= high_score) {
+        debug("Bumped");
+        return [ 'bump', count ];
+      } else {
+        debug("Bumped, record");
+        return [ 'record', count ];
+      }
     }
     else if (count === 0) {
       debug("User ignored: bad guess, count was 0");
@@ -219,6 +227,9 @@ async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
   case 'bump':
     await msg.react('👍');
     break;
+  case 'record':
+    await msg.react('🤘');
+    break;
   case 'ignore':
     await msg.react('👀');
     break;
@@ -230,6 +241,9 @@ async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
     ]);
     break;
   }
+  default:
+    // assert switch is exhaustive
+    const _ : never = result;
   }
 }
 
