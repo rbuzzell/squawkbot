@@ -382,9 +382,7 @@ async function activeChannels(discord: D.Client, isProd: boolean): Promise<Set<D
     }
   });
 
-  if (isProd) {
-    await statusMessage(ctx, "Squawkbot active for real");
-  } else {
+  if (!isProd) {
     await statusMessage(ctx, "Squawkbot active in test mode");
   }
 })();
