@@ -205,6 +205,16 @@ The count's at ${count}. High score is ${high_score}.`;
   return msg;
 }
 
+function niceness(x: number) {
+  let nice = 0;
+  const xs : string = x + "";
+  for (let i = 0; i + 1 < xs.length; ++i) {
+    if (xs[i] == '6' && xs[i+1] == '9')
+      nice += 1;
+  }
+  return nice;
+}
+
 async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
   debug(`Evaluating "${msg.content}"`);
   let evalRes;
@@ -224,9 +234,17 @@ async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
 
   let [ result, prevCount ] = await incr(ctx, msg.author, msg.guild, evalRes.data.val);
   switch (result) {
-  case 'bump':
+  case 'bump': {
+    let count = prevCount + 1;
     await msg.react('👍');
+    if (niceness(count) > niceness(prevCount)) {
+      await msg.react('🇳');
+      await msg.react('🇮');
+      await msg.react('🇨');
+      await msg.react('🇪');
+    }
     break;
+  }
   case 'record':
     await msg.react('🤘');
     break;
