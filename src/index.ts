@@ -9,17 +9,6 @@ import { Command } from 'commander';
 var debug = require('debug')('squawk');
 var os = require("os");
 
-const program = new Command();
-
-program
-  .name('squawkbot')
-  .description('Discord counting bot')
-  .version('0.6.9')
-  .option('--evaluator <url>', 'eval endpoint', 'https://counter.robgssp.com')
-  .option('--allow-repeats', 'allow multiple guesses in a row')
-  .option('--register-commands', 'register bot commands')
-  .parse();
-
 type Options = {
   evaluator: string,
   allowRepeats: boolean,
@@ -54,12 +43,12 @@ type Context = {
   db: sqlite.Database,
   discord: D.Client,
   isProd: boolean,
-  channels: Set<D.TextChannel>,
+  channels: Map<D.Snowflake, D.TextChannel>,
   options: Options,
 };
 
 function currentCount(ctx: Context, guild: D.Guild): [number, string | null] {
-  let row = ctx.db.prepare('SELECT count, lastbumped FROM count WHERE GUILD = ?')
+  let row: any = ctx.db.prepare('SELECT count, lastbumped FROM count WHERE GUILD = ?')
     .get([ 'guild:' + guild.id ]);
 
   if (row === undefined) {
@@ -80,8 +69,8 @@ function incr(ctx: Context, user: D.User, guild: D.Guild, guess: string): [Count
 
     let [ count, lastbumped ] = currentCount(ctx, guild);
 
-    let high_score = ctx.db.prepare(`SELECT count FROM high_score WHERE guild = ?`)
-        .get([ guildId ])?.count || 0;
+    let high_score = (ctx.db.prepare(`SELECT count FROM high_score WHERE guild = ?`)
+                      .get([ guildId ]) as any)?.count || 0;
 
     debug(`Count was ${count}, lastbumped was ${lastbumped}`);
 
@@ -179,8 +168,8 @@ async function leaderboard(ctx: Context, guild: D.Guild): Promise<string> {
     losers = ctx.db.prepare(`SELECT user, loss FROM stats WHERE guild = ? ORDER BY loss DESC LIMIT 10`)
       .all([ 'guild:' + guild.id ]);
 
-    high_score = ctx.db.prepare(`SELECT count FROM high_score WHERE guild = ?`)
-      .get([ 'guild:' + guild.id ])?.count || 0;
+    high_score = (ctx.db.prepare(`SELECT count FROM high_score WHERE guild = ?`)
+                  .get([ 'guild:' + guild.id ]) as any)?.count || 0;
   })();
 
   let n = 0;
@@ -266,36 +255,36 @@ async function evalMessage(ctx: Context, msg: D.Message): Promise<void> {
 }
 
 async function statusMessage(ctx: Context, message: string): Promise<void> {
-  await Promise.all(Array.from(ctx.channels).map(async chan => {
+  await Promise.all(Array.from(ctx.channels).map(async ([ id, chan ]) => {
     await chan.send(message);
   }));
 }
 
-async function activeChannels(discord: D.Client, isProd: boolean): Promise<Set<D.TextChannel>> {
+async function activeChannels(discord: D.Client, isProd: boolean): Promise<Map<D.Snowflake, D.TextChannel>> {
   let targetChannel = isProd ? "counting" : "botspam";
-  return new Set((await Promise.all(
-    (await discord.guilds.fetch()).map(async (guild0: D.OAuth2Guild) => {
+  return new Map((await Promise.all(
+    (await discord.guilds.fetch()).map(async (guild0: D.OAuth2Guild): Promise<[ D.Snowflake, D.TextChannel ] | null> => {
       let guild = await guild0.fetch();
       let channel = (await guild.channels.fetch()).find(
         chan => chan.name === targetChannel);
 
-      if (channel instanceof D.TextChannel) return channel;
+      if (channel instanceof D.TextChannel) return [ channel.id, channel ];
     }))).filter(v => v));
 }
 
-(async () => {
+export async function main(opts: Options) {
   const client = new D.Client(
     {intents: [
-      1 << 15, // MESSAGE_CONTENT intent, not in discord.js yet
-      D.Intents.FLAGS.GUILDS,
-      D.Intents.FLAGS.GUILD_EMOJIS_AND_STICKERS,
-      D.Intents.FLAGS.GUILD_MESSAGES,
-      D.Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
-      D.Intents.FLAGS.DIRECT_MESSAGES,
+      D.GatewayIntentBits.Guilds,
+      D.GatewayIntentBits.GuildEmojisAndStickers,
+      D.GatewayIntentBits.GuildMessages,
+      D.GatewayIntentBits.GuildMessageReactions,
+      D.GatewayIntentBits.DirectMessages,
+      D.GatewayIntentBits.MessageContent,
     ],
      // Required to receive DMs. See https://github.com/discordjs/discord.js/issues/5516
      partials: [
-       'CHANNEL',
+       D.Partials.Channel
      ]});
 
   let db = Database("test.db");
@@ -310,7 +299,7 @@ async function activeChannels(discord: D.Client, isProd: boolean): Promise<Set<D
     discord: client,
     isProd: isProd,
     channels: await activeChannels(client, isProd),
-    options: program.opts(),
+    options: opts,
   };
 
   setupDb(ctx);
@@ -339,10 +328,7 @@ async function activeChannels(discord: D.Client, isProd: boolean): Promise<Set<D
 
   client.on('messageCreate', async (msg: D.Message) => {
     try {
-      let channel = msg.channel;
-      if (channel.partial) await channel.fetch();
-
-      if (channel instanceof D.TextChannel && ctx.channels.has(channel) &&
+      if (ctx.channels.has(msg.channelId) &&
           msg.author.id != client.user.id) {
         await evalMessage(ctx, msg);
         debug("Response complete");
@@ -353,7 +339,9 @@ async function activeChannels(discord: D.Client, isProd: boolean): Promise<Set<D
   });
 
   client.on('interactionCreate', async (interact: D.Interaction) => {
-    if (interact.isCommand() && interact.command.name == "leaderboard") {
+    if (interact.isChatInputCommand() &&
+      interact.commandName == "leaderboard" &&
+      ctx.channels.has(interact.channelId)) {
       try {
         if (interact.guild) {
           debug("Leaderboard command in guild");
@@ -385,4 +373,4 @@ async function activeChannels(discord: D.Client, isProd: boolean): Promise<Set<D
   if (!isProd) {
     await statusMessage(ctx, "Squawkbot active in test mode");
   }
-})();
+}

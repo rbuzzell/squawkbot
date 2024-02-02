@@ -1,8 +1,8 @@
 {
-  description = "A very basic flake";
+  description = "Squawkbot";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.11";
     utils.url = "github:numtide/flake-utils";
   };
 
@@ -11,7 +11,7 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        deps = with pkgs; [ nodejs-18_x sqlite ];
+        deps = with pkgs; [ nodejs_21 sqlite ];
 
         nodeDeps = (import (self.packages.${system}.nodeEnv) {
           inherit pkgs;
@@ -19,55 +19,11 @@
 
       in {
         packages = {
-          srcsStripped = pkgs.runCommand "sources-stripped" { } ''
-            mkdir $out
-            ln -s ${./package.json} $out/package.json
-            ln -s ${./package-lock.json} $out/package-lock.json
-          '';
-
-          nodeEnv = pkgs.stdenv.mkDerivation {
-            name = "node-env";
-            src = self.packages.${system}.srcsStripped;
-            buildInputs = deps ++ [ pkgs.node2nix ];
-
-            buildPhase = ''
-              # WARNING: the node version and node2nix's mode must
-              # match, or else you will get mysterious symbol errors
-
-              node2nix -18 -l package-lock.json
-            '';
-            installPhase = ''
-              mkdir $out
-              cp package{,-lock}.json default.nix node-packages.nix node-env.nix $out
-            '';
-          };
-
-          squawkbot = pkgs.stdenv.mkDerivation {
+          squawkbot = pkgs.buildNpmPackage {
             name = "squawkbot";
             src = ./.;
-            buildInputs = deps;
-            nativeBuildInputs = [ pkgs.makeWrapper ];
-
-            buildPhase = ''
-              ln -s ${nodeDeps}/lib/node_modules node_modules
-
-              npm run build
-            '';
-
-            installPhase = ''
-              mkdir -p $out/lib $out/bin
-              cp -a dist node_modules $out/lib
-
-              cat > $out/bin/squawkbot <<EOF
-                #!/bin/sh
-                node $out/lib/dist/index.js "$@"
-              EOF
-              chmod a+x $out/bin/squawkbot
-
-              wrapProgram $out/bin/squawkbot \
-                --set PATH ${pkgs.lib.makeBinPath deps} \
-                --set LD_LIBRARY_PATH ${pkgs.lib.makeLibraryPath deps}
-            '';
+            npmDepsHash = "sha256-kuSM/WUXPK0tQnWGUQfoACWNPU8IG5qubBCM+mDL0Ho=";
+            npmPackFlags = [ "--ignore-scripts" ];
           };
 
           default = self.packages.${system}.squawkbot;
