@@ -1,7 +1,6 @@
-#!/usr/bin/env node
+import * as C from 'commander';
 
-const squawk = require("./dist/index");
-const C = require("commander");
+import * as squawk from './index';
 
 const program = new C.Command();
 

@@ -3,12 +3,12 @@
   "version": "0.0.1",
   "description": "The superior counting bot",
   "main": "src/index.ts",
-  "bin": "./cli.js",
+  "bin": "dist/cli.js",
   "scripts": {
     "build": "tsc --build",
     "clean": "tsc --build --clean",
     "prestart": "npm run build",
-    "start": "node -r dotenv/config ./cli.js"
+    "start": "node --enable-source-maps -r dotenv/config ./dist/cli.js"
   },
   "files": [
     "src",
@@ -37,5 +37,8 @@
     "discord.js": "*",
     "dotenv": "*",
     "typescript": "*"
+  },
+  "devDependencies": {
+    "@types/debug": "^4.1.12"
   }
 }

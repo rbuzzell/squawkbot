@@ -11,7 +11,7 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        deps = with pkgs; [ nodejs_21 sqlite ];
+        deps = with pkgs; [ nodejs_21 deno sqlite ];
 
         nodeDeps = (import (self.packages.${system}.nodeEnv) {
           inherit pkgs;
@@ -22,7 +22,7 @@
           squawkbot = pkgs.buildNpmPackage {
             name = "squawkbot";
             src = ./.;
-            npmDepsHash = "sha256-kuSM/WUXPK0tQnWGUQfoACWNPU8IG5qubBCM+mDL0Ho=";
+            npmDepsHash = "sha256-zLqr9pNHqgMsSfgU0H0b4q5YMlW+JmXfwND5G9xEUGk=";
             npmPackFlags = [ "--ignore-scripts" ];
           };
 
