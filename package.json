@@ -8,7 +8,7 @@
     "build": "tsc --build",
     "clean": "tsc --build --clean",
     "prestart": "npm run build",
-    "start": "node -r dotenv/config ./dist/index.js"
+    "start": "node -r dotenv/config ./cli.js"
   },
   "files": [
     "src",
