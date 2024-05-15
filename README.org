@@ -1,0 +1,20 @@
+#+title: SquawkBot
+
+A modular discord bot that handles counting, among other memes.
+
+* Usage
+
+build:
+#+BEGIN_SRC shell
+> npm run build
+#+END_SRC
+
+run with debugging:
+#+BEGIN_SRC shell
+> DEBUG=squawk npm run start
+#+END_SRC
+
+Automatically starts in dev mode if it isn't run on hostname "shoemaker". To change the default evaluator, run with
+#+BEGIN_SRC shell
+> DEBUG=squawk npm run start -- --evaluator http://localhost:6969
+#+END_SRC
