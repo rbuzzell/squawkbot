@@ -13,8 +13,6 @@ import { makeMixedCompany } from './mixedcompany';
 
 let debug = dbg('squawk');
 
-
-
 export async function main(opts: Options) {
   const client = new D.Client(
     {intents: [
@@ -30,7 +28,7 @@ export async function main(opts: Options) {
        D.Partials.Channel
      ]});
 
-  let isProd = os.hostname() === "shoemaker";
+  let isProd = !opts.test;
 
   await client.login(process.env.BOT_TOKEN);
   debug("Logged in!");

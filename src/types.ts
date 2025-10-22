@@ -5,6 +5,7 @@ export type Options = {
   evaluator: string,
   allowRepeats: boolean,
   registerCommands: boolean,
+  test: boolean,
 }
 
 export type Context = {
