@@ -66,7 +66,7 @@
             config = mkIf cfg.enable {
               systemd.services.squawkbot = {
                 wantedBy = [ "multi-user.target" ];
-                after = [ "network.target" ];
+                after = [ "network-online.target" ];
                 description = "squawkbot service";
                 serviceConfig = {
                   Type = "simple";
