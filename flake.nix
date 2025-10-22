@@ -55,6 +55,12 @@
                 description = "Which version of squawkbot are we using?";
                 default = self.packages.${system}.squawkbot;
               };
+
+              parserUrl = mkOption {
+                type = types.str;
+                description = "URL of counter-parser service";
+                default = "https://counter.robgssp.com";
+              };
             };
 
             config = mkIf cfg.enable {
@@ -66,7 +72,7 @@
                   Type = "simple";
                   Restart = "always";
                   RestartSec = "1";
-                  ExecStart = "${pkg}/bin/squawkbot";
+                  ExecStart = "${pkg}/bin/squawkbot --evaluator ${cfg.parserUrl}";
                   Environment = "DEBUG=squawk";
                   EnvironmentFile = cfg.envFile;
                   StateDirectory = "squawkbot";
