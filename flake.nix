@@ -11,7 +11,7 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        deps = with pkgs; [ nodejs_21 deno sqlite ];
+        deps = with pkgs; [ nodejs_22 deno sqlite ];
 
         nodeDeps = (import (self.packages.${system}.nodeEnv) {
           inherit pkgs;
